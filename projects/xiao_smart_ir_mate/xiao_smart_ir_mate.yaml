@@ -59,6 +59,8 @@ wifi:
         id: is_wifi_connected
         value: 'true'
     - light.turn_on: rgb_light
+    - lambda: |-
+        ESP_LOGI("ir", "IP address: %s", WiFi.localIP().toString().c_str());
 
   on_disconnect:
     - globals.set:
