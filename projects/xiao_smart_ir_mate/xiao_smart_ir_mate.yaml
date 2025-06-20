@@ -39,6 +39,10 @@ globals:
     type: std::vector<std::vector<long int>>
     restore_value: no
 
+  - id: send_data_vector
+    type: std::vector<long int>
+    restore_value: no
+
 # Enable logging
 logger:
   level: INFO
@@ -105,6 +109,15 @@ button:
   - platform: template
     id: transmit
     name: "Send"
+    on_press:
+      - lambda: |-
+          id(send_data_vector) = id(receive_signal_data_vector)[0];
+          if (id(send_data_vector).size() > 0) {
+            id(send_raw).execute();
+            ESP_LOGI("ir", "Sending signal size: %d", id(send_data_vector).size());
+          } else {
+            ESP_LOGI("ir", "Signal index not learned");
+          }
 
 
 binary_sensor:
@@ -211,6 +224,13 @@ script:
             }
             id(touch_count) = 0;
           }
+
+  - id: send_raw
+    then:
+      - remote_transmitter.transmit_raw:
+          code: !lambda return id(send_data_vector);
+          carrier_frequency: 38000Hz
+          repeat: 1
 
 interval:
   - id: blink_rgb
