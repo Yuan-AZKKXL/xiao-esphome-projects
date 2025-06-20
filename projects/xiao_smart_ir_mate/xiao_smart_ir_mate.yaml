@@ -31,6 +31,14 @@ globals:
     restore_value: no
     initial_value: '0'
 
+  - id: is_learning
+    type: bool
+    initial_value: 'false'
+
+  - id: receive_signal_data_vector
+    type: std::vector<std::vector<long int>>
+    restore_value: no
+
 # Enable logging
 logger:
   level: INFO
@@ -47,7 +55,7 @@ wifi:
         id: is_wifi_connected
         value: 'true'
     - light.turn_on: rgb_light
-  
+
   on_disconnect:
     - globals.set:
         id: is_wifi_connected
@@ -65,11 +73,39 @@ remote_transmitter:
   carrier_duty_percent: 50%
 
 remote_receiver:
-  pin: 
-    number: GPIO4 # D2
-    inverted: true
-  rmt_channel: 3
-  dump: all
+  - id: rcvr
+    pin:
+      number: GPIO4
+      inverted: true
+    idle: 100ms
+    clock_resolution: "500000"
+    on_raw:
+      - switch.turn_off: vibration_switch
+      - lambda: |-
+          if (id(is_learning)) {
+            id(receive_signal_data_vector).push_back(x);
+            if (id(receive_signal_data_vector).size() > 0){
+              ESP_LOGI("ir", "Received signal data size = : %d", x.size());
+            }
+            // close learning mode
+            id(is_learning) = false;
+          }
+
+
+button:
+  - platform: template
+    id: learn
+    name: "Learn"
+    on_press:
+      - switch.turn_on: vibration_switch
+      - lambda: |-
+          id(is_learning) = true;
+          ESP_LOGI("ir", "Learning mode activated!");
+
+  - platform: template
+    id: transmit
+    name: "Send"
+
 
 binary_sensor:
   - platform: gpio
@@ -77,7 +113,7 @@ binary_sensor:
     pin:
       number: GPIO5 # D3
       mode: INPUT_PULLDOWN
-    on_state: 
+    on_state:
       then:
         - lambda: |-
             id(vibe).execute(100);
@@ -99,7 +135,7 @@ binary_sensor:
     pin:
       number: GPIO9 # D9
       mode: INPUT_PULLUP
-    filters: 
+    filters:
       invert
 
     on_press:
@@ -139,15 +175,9 @@ light:
     rgb_order: GRB
     pin: GPIO7 # D5
     num_leds: 1
-    rmt_channel: 1
     chipset: ws2812
     name: "RGB Light"
     id: rgb_light
-
-button:
-  - platform: template
-    id: transmit
-    name: "transmitt"
 
 script:
   - id: vibe
