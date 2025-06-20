@@ -35,13 +35,18 @@ globals:
     type: bool
     initial_value: 'false'
 
-  - id: receive_signal_data_vector
-    type: std::vector<std::vector<long int>>
+  - id: receive_signal_data_map
+    type: std::map<int, std::vector<long int>>
     restore_value: no
 
   - id: send_data_vector
     type: std::vector<long int>
     restore_value: no
+
+  - id: signal_select_index
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 # Enable logging
 logger:
@@ -89,9 +94,9 @@ remote_receiver:
       - switch.turn_off: vibration_switch
       - lambda: |-
           if (id(is_learning)) {
-            id(receive_signal_data_vector).push_back(x);
-            if (id(receive_signal_data_vector).size() > 0){
-              ESP_LOGI("ir", "Received signal data size = : %d", x.size());
+            id(receive_signal_data_map)[id(signal_select_index)] = x;
+            if (id(receive_signal_data_map).size() > 0){
+              ESP_LOGI("ir", "Received signal data in select index: %d and signal data size = : %d",id(signal_select_index),  x.size());
             }
             // close learning mode
             id(is_learning) = false;
@@ -113,13 +118,35 @@ button:
     name: "Send"
     on_press:
       - lambda: |-
-          id(send_data_vector) = id(receive_signal_data_vector)[0];
+          id(send_data_vector) = id(receive_signal_data_map)[id(signal_select_index)];
           if (id(send_data_vector).size() > 0) {
             id(send_raw).execute();
-            ESP_LOGI("ir", "Sending signal size: %d", id(send_data_vector).size());
+            ESP_LOGI("ir", "Sending signal index: %d and signal data size: %d",id(signal_select_index), id(send_data_vector).size());
           } else {
             ESP_LOGI("ir", "Signal index not learned");
           }
+
+select:
+  - platform: template
+    name: signal_select
+    id: signal_select
+    options:
+      - "Signal0"
+      - "Signal1"
+      - "Signal2"
+      - "Signal3"
+      - "Signal4"
+      - "Signal5"
+      - "Signal6"
+      - "Signal7"
+      - "Signal8"
+      - "Signal9"
+    initial_option: "Signal0"
+    optimistic: true
+    on_value:
+      - lambda: |-
+          id(signal_select_index) = i;
+          ESP_LOGI("ir", "Current selected signal index: %d", i);
 
 
 binary_sensor:
