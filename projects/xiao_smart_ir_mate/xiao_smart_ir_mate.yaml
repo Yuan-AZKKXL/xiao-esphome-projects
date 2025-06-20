@@ -1,9 +1,10 @@
 substitutions:
-  name: "xiao-smart-ir-mate"
-  friendly_name: "XIAO Smart IR Mate"
+  name: "seeed-ir"
+  friendly_name: "seeed-ir"
+  version: "v1"
 
 esphome:
-  name: "${name}"
+  name: "${name}-${version}"
   friendly_name: "${friendly_name}"
   name_add_mac_suffix: True
 
@@ -35,18 +36,14 @@ globals:
     type: bool
     initial_value: 'false'
 
-  - id: receive_signal_data_map
-    type: std::map<int, std::vector<long int>>
-    restore_value: no
-
-  - id: send_data_vector
-    type: std::vector<long int>
-    restore_value: no
-
   - id: signal_select_index
     type: int
     restore_value: no
     initial_value: '0'
+
+  - id: send_data_vector
+    type: std::vector<long int>
+    restore_value: no
 
 # Enable logging
 logger:
@@ -57,13 +54,13 @@ api:
 
 ota:
   - platform: esphome
+    password: "15afb09b5aba7b3d6a6ba01180c60df5"
 
 wifi:
   on_connect:
     - globals.set:
         id: is_wifi_connected
         value: 'true'
-    - light.turn_on: rgb_light
     - lambda: |-
         ESP_LOGI("ir", "IP address: %s", WiFi.localIP().toString().c_str());
 
@@ -78,9 +75,20 @@ wifi:
 
 captive_portal:
 
+# Custom components
+external_components:
+  - source:
+      type: local        # Local component
+      path: esphome/components   # Path where the component is located
+    components: [Flash_comp]   # Explicitly specify the components to import
+
+# Component name
+Flash_comp:
+  id: flash_test  # Component id
+
 remote_transmitter:
   id: my_transmitter
-  pin: GPIO3 # D1
+  pin: GPIO3
   carrier_duty_percent: 50%
 
 remote_receiver:
@@ -94,14 +102,10 @@ remote_receiver:
       - switch.turn_off: vibration_switch
       - lambda: |-
           if (id(is_learning)) {
-            id(receive_signal_data_map)[id(signal_select_index)] = x;
-            if (id(receive_signal_data_map).size() > 0){
-              ESP_LOGI("ir", "Received signal data in select index: %d and signal data size = : %d",id(signal_select_index),  x.size());
-            }
-            // close learning mode
+            ESP_LOGI("ir", "Saved signal index: %d", id(signal_select_index));
+            id(flash_test).save_to_nvs(id(signal_select_index), x);
             id(is_learning) = false;
           }
-
 
 button:
   - platform: template
@@ -118,15 +122,12 @@ button:
     name: "Send"
     on_press:
       - lambda: |-
-          id(send_data_vector) = id(receive_signal_data_map)[id(signal_select_index)];
+          id(send_data_vector) = id(flash_test).load_from_nvs(id(signal_select_index));
           if (id(send_data_vector).size() > 0) {
-            for (auto value : id(send_data_vector)) {
-              ESP_LOGI("ir", "Sending signal data: %d", value);
-            }
             id(send_raw).execute();
-            ESP_LOGI("ir", "Sending signal index: %d and signal data size: %d",id(signal_select_index), id(send_data_vector).size());
+            ESP_LOGI("ir", "Sending signal index: %d", id(signal_select_index));
           } else {
-            ESP_LOGI("ir", "Signal index not learned");
+            ESP_LOGI("ir", "Signal index %d not learned", id(signal_select_index));
           }
 
 select:
@@ -150,7 +151,6 @@ select:
       - lambda: |-
           id(signal_select_index) = i;
           ESP_LOGI("ir", "Current selected signal index: %d", i);
-
 
 binary_sensor:
   - platform: gpio
@@ -196,6 +196,9 @@ binary_sensor:
               id(vibe).execute(100);
               ESP.restart();
             } else {
+              for (int i = 0; i < 10; i++) {
+                id(flash_test).clear_signal_by_index(i);
+              }
               id(vibe).execute(500);
               id(factory_switch).turn_on();
             }
@@ -214,15 +217,6 @@ switch:
   - platform: factory_reset
     id: factory_switch
     name: "Restart with Factory Default Settings"
-
-light:
-  - platform: esp32_rmt_led_strip
-    rgb_order: GRB
-    pin: GPIO7 # D5
-    num_leds: 1
-    chipset: ws2812
-    name: "Indicator Light"
-    id: rgb_light
 
 script:
   - id: vibe
@@ -263,23 +257,3 @@ script:
           code: !lambda return id(send_data_vector);
           carrier_frequency: 38000Hz
           repeat: 1
-
-interval:
-  - id: blink_rgb
-    interval: 500ms
-    then:
-      - lambda: |-
-          if (!id(is_wifi_connected)) {
-            static int state = 0;
-            if (state == 1) {
-              auto call = id(rgb_light).turn_on();
-              call.set_rgb(1.0, 1.0, 1.0);
-              call.set_transition_length(0);
-              call.perform();
-            } else {
-              auto call = id(rgb_light).turn_off();
-              call.set_transition_length(0);
-              call.perform();
-            }
-            state = !state;
-          }
