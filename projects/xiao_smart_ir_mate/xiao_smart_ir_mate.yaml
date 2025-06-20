@@ -120,6 +120,9 @@ button:
       - lambda: |-
           id(send_data_vector) = id(receive_signal_data_map)[id(signal_select_index)];
           if (id(send_data_vector).size() > 0) {
+            for (auto value : id(send_data_vector)) {
+              ESP_LOGI("ir", "Sending signal data: %d", value);
+            }
             id(send_raw).execute();
             ESP_LOGI("ir", "Sending signal index: %d and signal data size: %d",id(signal_select_index), id(send_data_vector).size());
           } else {
@@ -218,7 +221,7 @@ light:
     pin: GPIO7 # D5
     num_leds: 1
     chipset: ws2812
-    name: "RGB Light"
+    name: "Indicator Light"
     id: rgb_light
 
 script:
